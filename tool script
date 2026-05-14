@@ -75,6 +75,19 @@ local targetRecoilRoll = 0
 local recoilKick = 0
 local targetRecoilKick = 0
 
+-- Sway
+local swayOffset = Vector2.new(0, 0)
+local targetSwayOffset = Vector2.new(0, 0)
+local SWAY_AMOUNT = 0.012
+local SWAY_SMOOTHING = 0.08
+
+-- Bobbing
+local bobTimer = 0
+local bobOffset = Vector3.new(0, 0, 0)
+local BOB_SPEED = 10
+local BOB_AMOUNT_Y = 0.018
+local BOB_AMOUNT_X = 0.009
+
 local currentDistance = CAMERA_DISTANCE
 local currentFOV = NORMAL_FOV
 
@@ -295,12 +308,34 @@ local function enableShoulderCamera()
 	humanoid.CameraOffset = SHOULDER_OFFSET
 	humanoid.AutoRotate = false
 
-	cameraConnection = RunService.RenderStepped:Connect(function()
+	cameraConnection = RunService.RenderStepped:Connect(function(deltaTime)
 		local rootPart = getRootPart()
 		local camera = workspace.CurrentCamera
 		local humanoid = getHumanoid()
 
 		if not rootPart or not camera or not humanoid then return end
+		
+		local delta = UserInputService:GetMouseDelta()
+		targetSwayOffset = Vector2.new(
+			math.clamp(-delta.X * SWAY_AMOUNT, -0.08, 0.08),
+			math.clamp(-delta.Y * SWAY_AMOUNT, -0.06, 0.06)
+		)
+		swayOffset = swayOffset + (targetSwayOffset - swayOffset) * SWAY_SMOOTHING
+
+		local isMoving = humanoid.MoveDirection.Magnitude > 0.1
+		local isGrounded = humanoid:GetState() == Enum.HumanoidStateType.Running
+
+		if isMoving and isGrounded and not isADS then
+			bobTimer = bobTimer + deltaTime * BOB_SPEED
+		else
+			bobTimer = bobTimer + (0 - bobTimer) * 0.1
+		end
+
+		bobOffset = Vector3.new(
+			math.sin(bobTimer) * BOB_AMOUNT_X,
+			math.abs(math.sin(bobTimer)) * BOB_AMOUNT_Y,
+			0
+		)
 
 		local lookVector = camera.CFrame.LookVector
 		local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z)
@@ -348,8 +383,8 @@ local function enableShoulderCamera()
 		recoilKick = recoilKick + (targetRecoilKick - recoilKick) * 0.75
 
 		camera.CFrame = camera.CFrame
-			* CFrame.new(0, 0, recoilKick)
-			* CFrame.Angles(-recoilOffset.X, recoilOffset.Y, recoilRoll)
+			* CFrame.new(bobOffset.X, bobOffset.Y, recoilKick)
+			* CFrame.Angles(-recoilOffset.X + swayOffset.Y, recoilOffset.Y + swayOffset.X, recoilRoll + swayOffset.X * 0.5)
 	end)
 end
 
